@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Desk: an AI agent that thinks, plans, uses tools, acts and remembers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F5F4F9; --panel:#FFFFFF; --ink:#221F33; --muted:#5E5A73; --line:#DEDBEA;
+  --think:#6B4EE6; --plan:#1F6FEB; --tools:#B25F00; --act:#14803C; --mem:#C2255C;
+  --think-s:#ECE8FD; --plan-s:#E3EEFD; --tools-s:#FDEFD9; --act-s:#DDF3E5; --mem-s:#FBE3EC;
+  --sans:'Familjen Grotesk',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'DM Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 var(--sans)}
+h1,h2,h3{margin:0;line-height:1.15}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--plan);outline-offset:2px}
+.wrap{max-width:1320px;margin:0 auto;padding:0 clamp(14px,3vw,36px)}
+header{padding:26px 0 14px}
+header h1{font-size:clamp(2rem,5vw,3.2rem);font-weight:700;letter-spacing:-.02em}
+.def{margin:10px 0 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:1.02rem}
+.def span.lead{color:var(--muted);margin-right:4px}
+.pill{border-radius:99px;padding:3px 13px;font-weight:600;font-size:.95rem}
+.pill.think{background:var(--think-s);color:var(--think)}.pill.plan{background:var(--plan-s);color:var(--plan)}
+.pill.tools{background:var(--tools-s);color:var(--tools)}.pill.act{background:var(--act-s);color:var(--act)}
+.pill.mem{background:var(--mem-s);color:var(--mem)}
+
+.goalbar{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0 18px}
+.goalbar label{font-weight:600;display:block;margin-bottom:6px}
+.goalbar textarea{width:100%;min-height:76px;resize:vertical;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:1.05rem;background:#fff}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
+.btn{border:0;border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;background:var(--think);color:#fff}
+.btn:hover{background:#563BC9}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.btn.alt{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.btn.alt:hover{background:var(--bg)}
+.btn.sm{padding:4px 10px;font-size:.8rem}
+.chip{border:1px solid var(--line);background:var(--bg);border-radius:99px;padding:4px 12px;font-size:.85rem;cursor:pointer}
+.chip:hover{border-color:var(--think);color:var(--think)}
+.engine{margin-left:auto;display:flex;gap:8px;align-items:center;font-size:.85rem;color:var(--muted)}
+.engine input[type=password]{width:210px;padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.mode{font-weight:600;padding:2px 10px;border-radius:99px;background:var(--bg);border:1px solid var(--line);color:var(--ink)}
+.check{display:flex;gap:6px;align-items:center;font-size:.88rem;color:var(--muted)}
+.status{font-size:.85rem;color:var(--muted);min-height:1.3em;margin-top:6px}
+
+.answer{background:var(--panel);border:1px solid var(--line);border-left:6px solid var(--act);border-radius:10px;padding:14px 16px;margin-bottom:18px;white-space:pre-wrap}
+.answer[hidden]{display:none}
+.answer b{display:block;margin-bottom:4px}
+
+.board{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:14px;align-items:start}
+.lane{background:var(--panel);border:1px solid var(--line);border-top:5px solid var(--lc);border-radius:10px;min-height:150px}
+.lane[data-lane=think]{--lc:var(--think);--ls:var(--think-s)}
+.lane[data-lane=plan]{--lc:var(--plan);--ls:var(--plan-s)}
+.lane[data-lane=tools]{--lc:var(--tools);--ls:var(--tools-s)}
+.lane[data-lane=act]{--lc:var(--act);--ls:var(--act-s)}
+.lane[data-lane=mem]{--lc:var(--mem);--ls:var(--mem-s)}
+.lane h2{font-size:1.15rem;color:var(--lc);padding:12px 14px 0}
+.lane p.sub{margin:2px 0 8px;padding:0 14px;color:var(--muted);font-size:.85rem}
+.feed{padding:0 10px 12px;max-height:460px;overflow:auto}
+.c{background:var(--ls);border-radius:8px;padding:8px 10px;margin-top:8px;font-size:.88rem;white-space:pre-wrap;word-break:break-word}
+.c small{display:block;font:500 .7rem var(--mono);color:var(--muted);margin-bottom:2px}
+.c.call{font-family:var(--mono);font-size:.8rem}
+.c.obs{background:#fff;border:1px dashed var(--lc)}
+.c.bad{background:#FBE3E1;color:#8E1F1A}
+.c.live{animation:pop .9s ease-out}
+@keyframes pop{from{box-shadow:0 0 0 4px var(--lc)}to{box-shadow:0 0 0 0 transparent}}
+@media(prefers-reduced-motion:reduce){.c.live{animation:none}}
+.none{color:var(--muted);font-size:.85rem;padding:8px 14px}
+
+.world{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:22px 0 40px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.card h3{font-size:1.05rem;margin-bottom:8px}
+.card ul{list-style:none;margin:0;padding:0;font-size:.9rem}
+.card li{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--line)}
+.card li small{color:var(--muted);display:block}
+.card li.done span.t{text-decoration:line-through;color:var(--muted)}
+.empty{color:var(--muted);font-size:.88rem}
+.out pre{white-space:pre-wrap;font:400 .82rem/1.5 var(--mono);background:var(--bg);padding:8px;border-radius:6px;margin:6px 0}
+.banner{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:10px;z-index:10;display:flex;gap:14px;align-items:center;max-width:92vw}
+.banner[hidden]{display:none}
+footer{padding:0 0 40px;color:var(--muted);font-size:.85rem;max-width:80ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Agent Desk</h1>
+  <p class="def"><span class="lead">An AI agent is an LLM that can</span>
+    <span class="pill think">think</span><span class="pill plan">plan</span><span class="pill tools">use tools</span><span class="pill act">take actions</span><span class="pill mem">remember information</span>
+  </p>
+</header>
+
+<section class="goalbar" aria-label="Give the agent a goal">
+  <label for="goal">Give the agent a goal</label>
+  <textarea id="goal" placeholder="Example: Add a task to call the bank by Friday, set a timer for 10 minutes called tea, and calculate 15% of 2400."></textarea>
+  <div class="row" id="examples"></div>
+  <div class="row">
+    <button class="btn" id="runBtn" onclick="runAgent()">Run agent</button>
+    <button class="btn alt" id="stopBtn" onclick="S.stop=true" disabled>Stop</button>
+    <button class="btn alt" onclick="clearBoard()">Clear board</button>
+    <label class="check"><input type="checkbox" id="confirm"> Ask me before it takes an action</label>
+    <div class="engine">
+      <span class="mode" id="mode">Offline agent</span>
+      <label for="apikey">Claude API key</label>
+      <input id="apikey" type="password" placeholder="optional" autocomplete="off">
+    </div>
+  </div>
+  <div class="status" id="status" aria-live="polite"></div>
+</section>
+
+<section class="answer" id="answer" hidden aria-live="polite"><b>Agent's answer</b><span id="answerText"></span></section>
+
+<section class="board" id="board" aria-label="Agent activity by capability">
+  <div class="lane" data-lane="think"><h2>Think</h2><p class="sub">Reasons about the goal</p><div class="feed"></div></div>
+  <div class="lane" data-lane="plan"><h2>Plan</h2><p class="sub">Breaks it into steps</p><div class="feed"></div></div>
+  <div class="lane" data-lane="tools"><h2>Use tools</h2><p class="sub">Calculates, looks up, reads</p><div class="feed"></div></div>
+  <div class="lane" data-lane="act"><h2>Take actions</h2><p class="sub">Changes tasks, timers, notes</p><div class="feed"></div></div>
+  <div class="lane" data-lane="mem"><h2>Remember</h2><p class="sub">Recalls and saves for later</p><div class="feed"></div></div>
+</section>
+
+<section class="world" aria-label="What the agent can change">
+  <div class="card"><h3>Tasks</h3><ul id="taskList"></ul></div>
+  <div class="card"><h3>Timers</h3><ul id="timerList"></ul></div>
+  <div class="card"><h3>Long-term memory</h3><ul id="memList"></ul>
+    <button class="btn alt sm" style="margin-top:8px" onclick="clearMem()">Forget everything</button></div>
+  <div class="card out"><h3>Written output</h3><div id="outList"></div></div>
+</section>
+
+<footer>
+  The loop: the agent thinks about the goal, writes a plan, then repeats <i>use a tool, read the result, think again</i> until the goal is done. Tools that only read or calculate appear under "Use tools". Tools that change something appear under "Take actions" as well. Everything here happens inside this page, so no real email or messages are sent.
+</footer>
+</div>
+<div class="banner" id="banner" hidden><span id="bannerText"></span><button class="btn alt sm" onclick="$('banner').hidden=true">Dismiss</button></div>
+
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+const ls={get(k,d){try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+
+let TASKS=ls.get('agentdesk-tasks',[]);
+let MEM=ls.get('agentdesk-mem',{notes:[],runs:[]});
+let TIMERS=[],OUTS=[];
+const S={running:false,stop:false,seq:0,tools:0};
+const EXAMPLES=[
+ 'Add a task to call the bank by Friday, set a timer for 10 minutes called tea, and calculate 15% of 2400.',
+ 'Convert 26.2 miles to km and save a note that my marathon distance is 42.195 km.',
+ 'What is today\'s date? Then list my tasks.',
+ 'What do you remember about marathon?'
+];
+
+/* ---------- units ---------- */
+const U={m:['len',1],km:['len',1000],mi:['len',1609.344],ft:['len',.3048],in:['len',.0254],cm:['len',.01],
+ kg:['mass',1],g:['mass',.001],lb:['mass',.45359237],oz:['mass',.0283495],
+ l:['vol',1],ml:['vol',.001],gal:['vol',3.78541],c:['temp'],f:['temp'],k:['temp']};
+const UA={miles:'mi',mile:'mi',kilometers:'km',kilometres:'km',kilometer:'km',meters:'m',metres:'m',feet:'ft',foot:'ft',inches:'in',inch:'in',pounds:'lb',pound:'lb',lbs:'lb',kilograms:'kg',kilogram:'kg',grams:'g',ounces:'oz',liters:'l',litres:'l',liter:'l',gallons:'gal',gallon:'gal',celsius:'c',fahrenheit:'f',kelvin:'k',centimeters:'cm',centimetres:'cm'};
+const nu=u=>{u=String(u).toLowerCase().replace('°','');return UA[u]||u};
+function convert(v,from,to){
+  from=nu(from);to=nu(to);const a=U[from],b=U[to];
+  if(!a||!b||a[0]!==b[0])throw new Error('Cannot convert '+from+' to '+to);
+  if(a[0]==='temp'){const c=from==='c'?v:from==='f'?(v-32)*5/9:v-273.15;return to==='c'?c:to==='f'?c*9/5+32:c+273.15}
+  return v*a[1]/b[1];
+}
+
+/* ---------- words and memory recall ---------- */
+const STOP=new Set('the and for with are was this that from your you our can will not have has any all but its into than then them they their there what when which who how why about after before over under also just only more most some such been being were does did get got use used out off per via remember know recall'.split(' '));
+const words=s=>new Set((String(s).toLowerCase().match(/[a-z0-9]+/g)||[]).filter(w=>w.length>2&&!STOP.has(w)).map(w=>w.length>4?w.replace(/(ing|ed|es|s)$/,''):w));
+function overlap(a,b){const A=words(a),B=words(b);let n=0;A.forEach(w=>{if(B.has(w))n++});return n}
+function recall(goal){
+  const notes=MEM.notes.map(n=>({n,s:overlap(goal,n.text+' '+(n.tag||''))})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,3).map(x=>x.n);
+  const run=MEM.runs.map(r=>({r,s:overlap(goal,r.goal)})).filter(x=>x.s>1).sort((a,b)=>b.s-a.s)[0];
+  return {notes,run:run&&run.r};
+}
+const saveMem=()=>ls.set('agentdesk-mem',MEM);
+const saveTasks=()=>ls.set('agentdesk-tasks',TASKS);
+
+/* ---------- tools ---------- */
+const TOOLS={
+ calculator:{acts:false,desc:'Evaluate an arithmetic expression using numbers and + - * / ( ) % ^. Use for any maths.',props:{expression:{type:'string',description:'e.g. 0.15*2400'}},req:['expression'],
+  run:a=>{const e=String(a.expression||'').replace(/\^/g,'**');
+    if(!e.trim()||!/^[\d+\-*/().%\s]+$/.test(e))throw new Error('Only numbers and + - * / ( ) % ^ are allowed');
+    const r=Function('"use strict";return ('+e+')')();if(typeof r!=='number'||!isFinite(r))throw new Error('Result is not a number');
+    return String(+r.toFixed(6))}},
+ convert_units:{acts:false,desc:'Convert between units: km, mi, m, ft, in, cm, kg, lb, g, oz, l, ml, gal, c, f, k.',props:{value:{type:'number'},from:{type:'string'},to:{type:'string'}},req:['value','from','to'],
+  run:a=>{const r=convert(Number(a.value),a.from,a.to);return a.value+' '+nu(a.from)+' = '+(+r.toFixed(4))+' '+nu(a.to)}},
+ get_datetime:{acts:false,desc:'Get the current local date and time.',props:{},req:[],
+  run:()=>new Date().toLocaleString(undefined,{dateStyle:'full',timeStyle:'short'})},
+ list_tasks:{acts:false,desc:'List all tasks with their ids and status.',props:{},req:[],
+  run:()=>TASKS.length?TASKS.map(t=>'#'+t.id+' ['+(t.done?'x':' ')+'] '+t.title+(t.due?' (due '+t.due+')':'')).join('\n'):'No tasks yet.'},
+ search_notes:{acts:false,desc:'Search saved long-term notes by keywords.',props:{query:{type:'string'}},req:['query'],
+  run:a=>{const r=MEM.notes.map(n=>({n,s:overlap(a.query,n.text+' '+(n.tag||''))})).filter(x=>x.s>0).sort((x,y)=>y.s-x.s).slice(0,5);
+    return r.length?r.map(x=>'- '+x.n.text).join('\n'):'No saved notes match "'+a.query+'".'}},
+ add_task:{acts:true,desc:'Add a task to the to-do list.',props:{title:{type:'string'},due:{type:'string',description:'optional, free text'}},req:['title'],
+  run:a=>{const t={id:(TASKS.reduce((m,x)=>Math.max(m,x.id),0)+1),title:String(a.title).trim(),due:a.due?String(a.due).trim():'',done:false};
+    if(!t.title)throw new Error('A task needs a title');TASKS.push(t);saveTasks();renderTasks();return 'Added task #'+t.id+': '+t.title+(t.due?' (due '+t.due+')':'')}},
+ complete_task:{acts:true,desc:'Mark a task as done, by id or by part of its title.',props:{id:{type:'number'},title:{type:'string'}},req:[],
+  run:a=>{const t=a.id!=null?TASKS.find(x=>x.id===Number(a.id)):TASKS.find(x=>a.title&&x.title.toLowerCase().includes(String(a.title).toLowerCase()));
+    if(!t)throw new Error('No matching task');t.done=true;saveTasks();renderTasks();return 'Marked task #'+t.id+' as done: '+t.title}},
+ set_timer:{acts:true,desc:'Start a countdown timer (up to 24 hours) that alerts in this page.',props:{minutes:{type:'number'},label:{type:'string'}},req:['minutes'],
+  run:a=>{const m=Number(a.minutes);if(!(m>0&&m<=1440))throw new Error('Minutes must be between 0 and 1440');
+    TIMERS.push({id:Date.now()+Math.random(),label:String(a.label||'Timer'),end:Date.now()+m*60000,fired:false});renderTimers();return 'Timer "'+(a.label||'Timer')+'" started for '+m+' min'}},
+ save_note:{acts:true,desc:'Save a fact to long-term memory so it can be recalled in future runs.',props:{text:{type:'string'},tag:{type:'string'}},req:['text'],
+  run:a=>{const text=String(a.text||'').trim();if(!text)throw new Error('Note is empty');MEM.notes.push({id:Date.now(),text,tag:a.tag||'',ts:Date.now()});MEM.notes=MEM.notes.slice(-100);saveMem();renderMem();
+    card('mem','Saved to memory: '+text,'obs');return 'Saved note: '+text}},
+ write_output:{acts:true,desc:'Write a document (draft email, summary, list) to the Written output panel for the user to copy.',props:{title:{type:'string'},text:{type:'string'}},req:['title','text'],
+  run:a=>{OUTS.push({title:String(a.title),text:String(a.text)});renderOuts();return 'Wrote "'+a.title+'" to the output panel'}}
+};
+const fmtArgs=a=>Object.entries(a||{}).filter(([,v])=>v!==undefined&&v!=='').map(([k,v])=>k+': '+JSON.stringify(v)).join(', ');
+
+/* ---------- offline "brain": rules that read a clause and choose a tool ---------- */
+const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+function splitGoal(g){
+  return g.split(/\s*(?:;|\.\s+|\n+|\bthen\b)\s*/i)
+    .flatMap(p=>p.split(/(?:\s*,\s*(?:and\s+)?|\s+and\s+)(?=(?:add|create|remind|calculate|compute|convert|save|note|remember|list|show|set|mark|complete|finish|write|draft|what|how|tell|start|recall|search)\b)/i))
+    .map(s=>s.trim().replace(/[.!?]+$/,'')).filter(Boolean);
+}
+function mapClause(c){
+  const t=c.trim();let m;
+  if(/what(?:'s| is) (?:the )?(?:current )?(?:date|time|day)|today'?s date|current (?:date|time)/i.test(t))
+    return {tool:'get_datetime',args:{},why:'This asks for the date or time. I should read the clock, not guess.'};
+  if((m=t.match(/(-?\d+(?:\.\d+)?)\s*°?\s*([a-z]+)\s+(?:to|in|into)\s+°?([a-z]+)/i))&&U[nu(m[2])]&&U[nu(m[3])])
+    return {tool:'convert_units',args:{value:+m[1],from:m[2],to:m[3]},why:'This is a unit conversion. A tool is more reliable than recalling conversion factors.'};
+  if((m=t.match(/(?:timer|remind me|alarm)\b.*?\b(?:in|for)\s+(\d+(?:\.\d+)?)\s*(hours?|hrs?|h|minutes?|mins?|m)\b(?:\s+(?:to|about|that|called|named)\s+(.+))?/i)))
+    return {tool:'set_timer',args:{minutes:/^h/i.test(m[2])?+m[1]*60:+m[1],label:(m[3]||'Timer').trim()},why:'This needs something to happen later, so I will start a timer.'};
+  if(/\b(?:list|show|what are|what's on|see)\b.*\b(?:tasks?|to-?dos?)\b/i.test(t))
+    return {tool:'list_tasks',args:{},why:'To report the tasks I need to read the list, not assume what is on it.'};
+  if(!/^\s*(?:add|create|new)\b/i.test(t)&&(/\btask\b|to-?do/i.test(t)||/#\d+/.test(t))&&(m=t.match(/\b(?:complete|finish|mark(?: as done)?|done with|tick off)\s*(?:the\s+)?(?:task\s*)?#?(\d+)\s*(?:as done)?$/i)))
+    return {tool:'complete_task',args:{id:+m[1]},why:'The goal says a task is finished, so I will update its status.'};
+  if(!/^\s*(?:add|create|new)\b/i.test(t)&&/\btask\b|to-?do/i.test(t)&&(m=t.match(/\b(?:complete|finish|mark(?: as done)?|done with|tick off)\s+(?:the\s+)?(?:task\s+)?(.+?)(?:\s+as done)?$/i)))
+    return {tool:'complete_task',args:{title:m[1].replace(/^task\s+/i,'')},why:'The goal says a task is finished, so I will find it by title and update it.'};
+  if((m=t.match(/(?:what do you (?:remember|know)|recall|search (?:my )?notes?|what did i (?:say|note|save)|find (?:my )?notes?)\s*(?:about|on|for|regarding)?\s*(.*)$/i)))
+    return {tool:'search_notes',args:{query:m[1]||t},why:'This asks about something I may have saved before, so I will search my notes.'};
+  if((m=t.match(/\b(?:add|create|new)\s+(?:a\s+|an\s+)?(?:task|todo|to-?do)\s*(?:to|:|-)?\s*(.+)$/i))||(m=t.match(/\bremind me to\s+(.+)$/i))||(m=t.match(/\bto-?do:\s*(.+)$/i))){
+    let title=m[1].trim(),due='';const d=title.match(/^(.*?)\s+by\s+(.+)$/i);if(d){title=d[1];due=d[2]}
+    return {tool:'add_task',args:{title:cap(title),due},why:'This is something to do later, so I will add it to the task list.'};
+  }
+  if((m=t.match(/\b(?:remember|save a note|note down|note|jot down)\b\s*(?:that|:|-)?\s*(.+)$/i)))
+    return {tool:'save_note',args:{text:cap(m[1])},why:'This is a fact worth keeping, so I will save it to long-term memory.'};
+  const e=t.toLowerCase().replace(/(\d+(?:\.\d+)?)\s*%\s*of\s*(\d+(?:\.\d+)?)/g,'($1/100*$2)').replace(/\bplus\b/g,'+').replace(/\bminus\b/g,'-')
+    .replace(/\b(?:times|multiplied by|x)\b/g,'*').replace(/\bdivided by\b/g,'/').replace(/\bto the power of\b/g,'^').replace(/(\d),(?=\d{3}\b)/g,'$1');
+  const ex=e.replace(/^(?:please\s+)?(?:calculate|compute|what is|what's|how much is|solve|work out)\s*/,'').replace(/[?=]+$/,'').trim();
+  if(/\d/.test(ex)&&/[+\-*/^%]/.test(ex)&&/^[\d+\-*/().%^\s]+$/.test(ex))
+    return {tool:'calculator',args:{expression:ex},why:'This is arithmetic. I will use the calculator instead of doing it in my head.'};
+  if((m=t.match(/\b(?:write|draft|compose)\b\s+(?:a\s+|an\s+)?(.+)$/i)))
+    return {tool:'write_output',args:{title:cap(m[1]).slice(0,60),text:cap(m[1])+'\n\n[Placeholder] The offline agent cannot compose text. Add a Claude API key and run again for a real draft.'},why:'This asks for written output, so I will put it in the output panel.'};
+  return null;
+}
+
+/* ---------- board ---------- */
+function card(lane,text,kind){
+  const feed=document.querySelector('.lane[data-lane="'+lane+'"] .feed');
+  const d=document.createElement('div');d.className='c '+(kind||'')+' live';
+  d.innerHTML='<small>#'+(++S.seq)+'</small>'+esc(text);
+  feed.appendChild(d);feed.scrollTop=feed.scrollHeight;
+}
+function clearBoard(){
+  if(S.running)return;
+  document.querySelectorAll('.feed').forEach(f=>f.innerHTML='');S.seq=0;$('answer').hidden=true;status('');
+}
+function status(m){$('status').textContent=m}
+function showAnswer(t){$('answerText').textContent=t;$('answer').hidden=false}
+
+/* ---------- world panels ---------- */
+function renderTasks(){
+  $('taskList').innerHTML=TASKS.length?TASKS.map(t=>`<li class="${t.done?'done':''}"><span class="t"><b>#${t.id}</b> ${esc(t.title)}${t.due?`<small>Due ${esc(t.due)}</small>`:''}</span><span><button class="btn alt sm" onclick="toggleTask(${t.id})">${t.done?'Reopen':'Done'}</button> <button class="btn alt sm" onclick="delTask(${t.id})" aria-label="Delete task ${t.id}">Delete</button></span></li>`).join(''):'<li class="empty">No tasks. Ask the agent to add one.</li>';
+}
+function toggleTask(id){const t=TASKS.find(x=>x.id===id);if(t){t.done=!t.done;saveTasks();renderTasks()}}
+function delTask(id){TASKS=TASKS.filter(x=>x.id!==id);saveTasks();renderTasks()}
+function renderTimers(){
+  const now=Date.now();
+  $('timerList').innerHTML=TIMERS.length?TIMERS.map(t=>{const left=Math.max(0,Math.round((t.end-now)/1000));const mm=String(Math.floor(left/60)).padStart(2,'0'),ss=String(left%60).padStart(2,'0');
+    return `<li><span class="t">${esc(t.label)}<small>${left?mm+':'+ss+' left':'Finished'}</small></span><button class="btn alt sm" onclick="delTimer(${t.id})">Remove</button></li>`}).join(''):'<li class="empty">No timers running. Timers are lost if you close this page.</li>';
+}
+function delTimer(id){TIMERS=TIMERS.filter(t=>t.id!==id);renderTimers()}
+setInterval(()=>{
+  let fired=false;TIMERS.forEach(t=>{if(!t.fired&&Date.now()>=t.end){t.fired=true;fired=true;$('bannerText').textContent='Timer finished: '+t.label;$('banner').hidden=false}});
+  if(TIMERS.length)renderTimers();
+},1000);
+function renderMem(){
+  $('memList').innerHTML=MEM.notes.length?MEM.notes.slice(-8).reverse().map(n=>`<li><span class="t">${esc(n.text)}</span><button class="btn alt sm" onclick="delNote(${n.id})" aria-label="Delete note">Delete</button></li>`).join('')+`<li class="empty">${MEM.runs.length} past run${MEM.runs.length===1?'':'s'} also remembered</li>`:'<li class="empty">Empty. Ask the agent to remember something.</li>';
+}
+function delNote(id){MEM.notes=MEM.notes.filter(n=>n.id!==id);saveMem();renderMem()}
+function clearMem(){MEM={notes:[],runs:[]};saveMem();renderMem()}
+function renderOuts(){
+  $('outList').innerHTML=OUTS.length?OUTS.map((o,i)=>`<b>${esc(o.title)}</b><pre>${esc(o.text)}</pre><button class="btn alt sm" onclick="copyOut(${i})">Copy</button>`).join('<hr style="border:0;border-top:1px solid var(--line);margin:10px 0">'):'<span class="empty">Nothing written yet. Try "Write a short email asking for a deadline extension".</span>';
+}
+function copyOut(i){(navigator.clipboard?navigator.clipboard.writeText(OUTS[i].text):Promise.reject()).then(()=>status('Copied.'),()=>status('Select the text and copy it manually.'))}
+
+/* ---------- running a tool (shared by both brains) ---------- */
+async function execTool(name,args){
+  const t=TOOLS[name];
+  if(!t)return {ok:false,text:'Error: unknown tool '+name};
+  card('tools',name+'('+fmtArgs(args)+')','call');
+  if(t.acts&&$('confirm').checked&&!window.confirm('Allow the agent to run '+name+'('+fmtArgs(args)+')?')){
+    card('act','You blocked: '+name,'bad');return {ok:false,text:'The user declined this action. Do not retry it.'};
+  }
+  await delay(350);
+  try{
+    const text=t.run(args||{});S.tools++;
+    card('tools',t.acts?'Done':'Result: '+text,'obs');
+    if(t.acts)card('act',text);
+    return {ok:true,text};
+  }catch(e){card('tools','Error: '+e.message,'bad');return {ok:false,text:'Error: '+e.message}}
+}
+
+/* ---------- brain 1: offline rules ---------- */
+async function offlineLoop(goal){
+  const parts=splitGoal(goal);
+  card('think','The goal has '+parts.length+' part'+(parts.length===1?'':'s')+'. I will do them in order and use a tool whenever a part needs one.');
+  await delay(450);
+  const steps=parts.map(p=>({text:p,m:mapClause(p)}));
+  card('plan',steps.map((s,i)=>(i+1)+'. '+s.text+(s.m?'  [tool: '+s.m.tool+']':'  [no tool matched]')).join('\n'));
+  const results=[];
+  for(const [i,s] of steps.entries()){
+    if(S.stop)break;
+    await delay(500);
+    if(!s.m){card('think','Step '+(i+1)+' ("'+s.text+'") does not match any tool I can use offline. With a Claude API key I can reason about open-ended steps.','bad');results.push((i+1)+'. Skipped: needs the Claude engine');continue}
+    card('think','Step '+(i+1)+': '+s.m.why);
+    const r=await execTool(s.m.tool,s.m.args);
+    results.push((i+1)+'. '+r.text);
+  }
+  return results.join('\n');
+}
+
+/* ---------- brain 2: Claude with real tool calling ---------- */
+async function claudeLoop(goal,key,mem){
+  const toolDefs=[{name:'submit_plan',description:'Record your plan: a short ordered list of steps. Call this once, before using other tools.',input_schema:{type:'object',properties:{steps:{type:'array',items:{type:'string'}}},required:['steps']}}]
+    .concat(Object.entries(TOOLS).map(([name,t])=>({name,description:t.desc,input_schema:{type:'object',properties:t.props,required:t.req}})));
+  const system='You are a task agent inside a small web app. First write one or two sentences of reasoning about the goal. Then call submit_plan with 2 to 6 short steps. Then carry out the steps by calling tools, one or more at a time. Use tools for any calculation, date, task, timer, note or written output instead of guessing. When finished, reply with a brief final answer. Today is '+new Date().toDateString()+'.'
+    +(mem?'\n\nThings you remember from earlier:\n'+mem:'');
+  const msgs=[{role:'user',content:goal}];
+  for(let turn=0;turn<8&&!S.stop;turn++){
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
+      headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-5-5',max_tokens:1200,system,tools:toolDefs,messages:msgs})});
+    if(!r.ok){let d='';try{d=(await r.json()).error.message}catch(e){}throw new Error('API '+r.status+(d?': '+d:''))}
+    const j=await r.json();msgs.push({role:'assistant',content:j.content});
+    const results=[];let finalText='';
+    for(const b of j.content){
+      if(b.type==='text'&&b.text.trim()){
+        if(j.content.some(x=>x.type==='tool_use')||turn===0){card('think',b.text.trim())}else finalText=b.text.trim();
+      }else if(b.type==='tool_use'){
+        if(b.name==='submit_plan'){card('plan',(b.input.steps||[]).map((s,i)=>(i+1)+'. '+s).join('\n'));results.push({type:'tool_result',tool_use_id:b.id,content:'Plan recorded. Continue with step 1.'})}
+        else{const o=await execTool(b.name,b.input);results.push({type:'tool_result',tool_use_id:b.id,content:o.text,is_error:!o.ok})}
+      }
+    }
+    if(!results.length)return finalText||'Done.';
+    msgs.push({role:'user',content:results});
+    await delay(250);
+  }
+  return S.stop?'Stopped before the agent finished.':'The agent hit its step limit (8 turns) before finishing.';
+}
+
+/* ---------- main run ---------- */
+async function runAgent(){
+  if(S.running)return;
+  const goal=$('goal').value.trim();
+  if(!goal){status('Type a goal first, or pick an example.');$('goal').focus();return}
+  S.running=true;S.stop=false;S.tools=0;$('runBtn').disabled=true;$('stopBtn').disabled=false;
+  clearBoardForce();status('Agent is working…');
+  const key=$('apikey').value.trim();
+  const rc=recall(goal);
+  const memText=rc.notes.map(n=>'- '+n.text).concat(rc.run?['- Earlier run: "'+rc.run.goal+'" ended with: '+rc.run.summary]:[]).join('\n');
+  card('mem',rc.notes.length||rc.run?'Recalled before starting:\n'+memText:'Nothing in memory relates to this goal yet.',rc.notes.length||rc.run?'':'obs');
+  await delay(400);
+  let answer='',engine=key?'Claude':'Offline';
+  try{
+    if(key){
+      try{answer=await claudeLoop(goal,key,memText)}
+      catch(e){
+        card('think','The Claude call failed ('+e.message+').'+(S.tools?' Stopping here.':' Switching to the offline agent.'),'bad');
+        if(S.tools)answer='The run stopped because the Claude call failed: '+e.message;
+        else{engine='Offline';answer=await offlineLoop(goal)}
+      }
+    }else answer=await offlineLoop(goal);
+  }catch(e){answer='Something went wrong: '+e.message}
+  showAnswer(answer);
+  MEM.runs.push({goal,summary:S.tools+' tool call'+(S.tools===1?'':'s')+' by the '+engine.toLowerCase()+' agent',ts:Date.now()});MEM.runs=MEM.runs.slice(-30);saveMem();
+  card('mem','Saved this run to memory: '+S.tools+' tool call'+(S.tools===1?'':'s')+'.');renderMem();
+  S.running=false;$('runBtn').disabled=false;$('stopBtn').disabled=true;status('Finished with the '+engine.toLowerCase()+' agent.');
+}
+function clearBoardForce(){document.querySelectorAll('.feed').forEach(f=>f.innerHTML='');S.seq=0;$('answer').hidden=true}
+
+/* ---------- init ---------- */
+$('examples').innerHTML=EXAMPLES.map((e,i)=>`<button class="chip" onclick="$('goal').value=EXAMPLES[${i}]">Example ${i+1}</button>`).join('');
+$('apikey').addEventListener('input',()=>{$('mode').textContent=$('apikey').value.trim()?'Claude agent':'Offline agent'});
+renderTasks();renderTimers();renderMem();renderOuts();
+</script>
+</body>
+</html>
